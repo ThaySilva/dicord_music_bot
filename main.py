@@ -1,5 +1,6 @@
 import asyncio
 import discord
+from discord import app_commands
 from discord.ext import commands
 import validators
 import yt_dlp
@@ -12,6 +13,7 @@ DISCORD_TOKEN = <<ADD DISCORD_TOKEN>>
 intents = discord.Intents.default()
 intents.message_content = True
 intents.voice_states = True
+intents.guilds = True
 
 dj_yasuo = commands.Bot(command_prefix=BOT_PREFIX, intents=intents)
 
@@ -23,7 +25,6 @@ FFMPEG_OPTIONS = {
 
 YTDL_OPTIONS = {
     'format': 'bestaudio/best',
-    'outtmpl': 'downloads/%(extractor)s-%(id)s-%(title)s.%(ext)s',
     'restrictfilenames': True,
     'noplaylist': True,
     'nocheckcertificate': True,
@@ -32,42 +33,51 @@ YTDL_OPTIONS = {
     'quiet': True,
     'no_warnings': True,
     'default_search': 'auto',
+    'source_address': '0.0.0.0',
 }
 
 @dj_yasuo.event
 async def on_ready():
     print(f"DJ Yasuo connected as {dj_yasuo.user}")
+    try:
+        synced = await dj_yasuo.tree.sync()
+        print(f"Synced {len(synced)} commands(s)")
+    except Exception as e:
+        print(f"Error encounteres: {e}")
 
-@dj_yasuo.command(name='join')
-async def join(ctx):
-    if not ctx.message.author.voice:
-        await ctx.send(f"Some mistakes you can\'t make twice. Join a voice channel.")
+@dj_yasuo.tree.command(name="join", description="DJ Yasuo will join the voice channel.")
+async def join(ctx: discord.Interaction):
+    if not ctx.user.voice:
+        await ctx.response.send_message(f"Some mistakes you can\'t make twice. Join a voice channel.")
         return
     
-    channel = ctx.message.author.voice.channel
+    channel = ctx.user.voice.channel
     await channel.connect()
-    await ctx.send(f"A wanderer isn\'t always lost. Joined {channel.name}")
+    await ctx.response.send_message(f"A wanderer isn\'t always lost. Joined {channel.name}")
 
-@dj_yasuo.command(name='leave')
-async def leave(ctx):
-    if ctx.voice_client:
+@dj_yasuo.tree.command(name="leave", description="DJ Yasuo will leave the voice channel.")
+async def leave(ctx: discord.Interaction):
+    if ctx.guild.voice_client:
         await ctx.guild.voice_client.disconnect()
-        await ctx.send(f"No cure for fools.")
+        await ctx.response.send_message(f"No cure for fools.")
     else:
-        await ctx.send(f"If you've come to kill me... I hope you brought friends. I am not in a voice channel.")
+        await ctx.response.send_message(f"If you've come to kill me... I hope you brought friends. I am not in a voice channel.")
 
-@dj_yasuo.command('play')
-async def play(ctx, *, query):
-    if not ctx.voice_client:
-        if ctx.author.voice:
-            channel = ctx.author.voice.channel
+@dj_yasuo.tree.command(name="play", description="DJ Yasuo will play a song.")
+@app_commands.describe(query="Song name and artist or youtube url")
+async def play(ctx: discord.Interaction, query: str):
+    await ctx.response.defer()
+
+    if not ctx.guild.voice_client:
+        if ctx.user.voice:
+            channel = ctx.user.voice.channel
             await channel.connect()
-            await ctx.send(f"A wanderer isn\'t always lost. Joined {channel.name}")
+            await ctx.followup.send(f"A wanderer isn\'t always lost. Joined {channel.name}")
         else:
-            await ctx.send(f"Some mistakes you can\'t make twice. Join a voice channel.")
+            await ctx.followup.send(f"Some mistakes you can\'t make twice. Join a voice channel.")
             return
     
-    channel = ctx.voice_client
+    channel = ctx.guild.voice_client
 
     with yt_dlp.YoutubeDL(YTDL_OPTIONS) as ydl:
         try:
@@ -90,15 +100,15 @@ async def play(ctx, *, query):
         channel.stop()
 
     channel.play(discord.FFmpegPCMAudio(song_url, **FFMPEG_OPTIONS))
-    await ctx.send(f"Now playing: {song_title}")
+    await ctx.followup.send(f"Now playing: {song_title}")
 
-@dj_yasuo.command(name='stop')
-async def stop(ctx):
-    if ctx.voice_client:
-        ctx.voice_client.stop()
-        await ctx.send(f"Stopped playing.")
+@dj_yasuo.tree.command(name="stop", description="DJ Yasuo will stop playing the current song.")
+async def stop(ctx: discord.Interaction):
+    if ctx.guild.voice_client:
+        ctx.guild.voice_client.stop()
+        await ctx.response.send_message(f"Stopped playing.")
     else:
-        await ctx.send(f"If you've come to kill me... I hope you brought friends. I am not in a voice channel.")
+        await ctx.response.send_message(f"If you've come to kill me... I hope you brought friends. I am not in a voice channel.")
 
 
 dj_yasuo.run(DISCORD_TOKEN)
