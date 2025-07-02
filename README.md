@@ -1,7 +1,6 @@
 # DJ Yasuo V0.1
 
-<div class="tenor-gif-embed" data-postid="25781963" data-share-method="host" data-aspect-ratio="1.78771" data-width="100%"><a href="https://tenor.com/view/djing-yasuo-duckwrth-true-damage-giants-song-gif-25781963">Djing Yasuo GIF</a>from <a href="https://tenor.com/search/djing-gifs">Djing GIFs</a></div> <script type="text/javascript" async src="https://tenor.com/embed.js"></script>
-
+<center><img src='https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhfT_PDIcDSUSDxgaPI2HRaE4_QMlcnoiFPl9pznBO8DSE7Wk1DjpcHIjenbZIS-lQV5ErA2woRxi2Z3f2cphaIcmUSL814GuzaamvnfXaQN4wuN7Tatk6nvv16jXK_Vuewxlm7t2Cnr6ye/w919-h516-p-k-no-nu/dj-yasuo-true-damage-uhdpaper.com-4K-5.1376-wp.thumbnail.jpg' width="800" height="450"></center> <br>
 
 DJ Yasuo a discord music bot created as a fun personal project. Written using [Python 3.12](https://www.python.org/downloads/release/python-3120/) and [discord.py](https://discordpy.readthedocs.io/en/stable/) library.
 
