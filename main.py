@@ -36,6 +36,50 @@ YTDL_OPTIONS = {
     'source_address': '0.0.0.0',
 }
 
+class Song:
+    def __init__(self, source, song, requester):
+        self.source = source
+        self.song = song
+        self.title = song.get('title')
+        self.url = song.get('url')
+        self.duration = self._format_duration(song.get('duration'))
+        self.thumbnail = song.get('thumbnail')
+        self.requester = requester
+
+    @classmethod
+    async def from_query(cls, query, *, loop=None, stream=False, requester=None):
+        loop = loop or asyncio.get_event_loop()
+
+        with yt_dlp.YoutubeDL(YTDL_OPTIONS) as ydl:
+            try:
+                if validators.url(query):
+                    song = ydl.extract_info(query, download=False)
+                else:
+                    song = ydl.extract_info(f"ytsearch:{query}", download=False)
+                    if 'entries' in song:
+                        song = song['entries'][0]
+                    else:
+                        song = song
+
+                song_url = song['url']
+            except Exception as e:
+                await print(f"Could not find or play the song. Error: `{e}`")
+                return
+
+        return cls(discord.FFmpegPCMAudio(song_url, **FFMPEG_OPTIONS), song=song, requester=requester)
+
+    def _format_duration(self, seconds):
+        if seconds is None:
+            return "N/A"
+        minutes, seconds = divmod(seconds, 60)
+        hours, minutes = divmod(minutes, 60)
+        if hours > 0:
+            return f"{int(hours):02}:{int(minutes):02}:{int(seconds):02}"
+        return f"{int(minutes):02}:{int(seconds):02}"
+
+# Store playlists per guilds
+song_queues = {}
+
 @dj_yasuo.event
 async def on_ready():
     print(f"DJ Yasuo connected as {dj_yasuo.user}")
@@ -50,7 +94,7 @@ async def join(ctx: discord.Interaction):
     if not ctx.user.voice:
         await ctx.response.send_message(f"Some mistakes you can\'t make twice. Join a voice channel.")
         return
-    
+
     channel = ctx.user.voice.channel
     await channel.connect()
     await ctx.response.send_message(f"A wanderer isn\'t always lost. Joined {channel.name}")
@@ -76,31 +120,26 @@ async def play(ctx: discord.Interaction, query: str):
         else:
             await ctx.followup.send(f"Some mistakes you can\'t make twice. Join a voice channel.")
             return
-    
+
     channel = ctx.guild.voice_client
 
-    with yt_dlp.YoutubeDL(YTDL_OPTIONS) as ydl:
-        try:
-            if validators.url(query):
-                song = ydl.extract_info(query, download=False)
-            else:
-                song = ydl.extract_info(f"ytsearch:{query}", download=False)
-                if 'entries' in song:
-                    song = song['entries'][0]
-                else:
-                    song = song
-
-            song_url = song['url']
-            song_title = song.get('title')
-        except Exception as e:
-            await ctx.send(f"Could not find or play the song. Error: `{e}`")
-            return
-    
     if channel.is_playing():
         channel.stop()
 
-    channel.play(discord.FFmpegPCMAudio(song_url, **FFMPEG_OPTIONS))
-    await ctx.followup.send(f"Now playing: {song_title}")
+    await ctx.followup.send(f"Sorye! Searching for `{query}`...")
+    try:
+        song = await Song.from_query(query, loop=dj_yasuo.loop, stream=True, requester=ctx.user)
+        embed_player = discord.Embed(title="Now Playing", description=f"{song.title}", color=discord.Color.blue())
+        embed_player.add_field(name="Requested By", value=song.requester.mention, inline=True)
+        embed_player.add_field(name="Duration", value=song.duration, inline=True)
+        if song.thumbnail:
+            embed_player.set_thumbnail(url=song.thumbnail)
+
+        channel.play(discord.FFmpegPCMAudio(song.url, **FFMPEG_OPTIONS))
+        await ctx.followup.send(embed=embed_player)
+    except Exception as e:
+        await ctx.followup.send(f"Could not find or play the song. Error: `{e}`")
+        print(f"Error in play command: {e}")
 
 @dj_yasuo.tree.command(name="stop", description="DJ Yasuo will stop playing the current song.")
 async def stop(ctx: discord.Interaction):
