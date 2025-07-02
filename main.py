@@ -141,6 +141,26 @@ async def play(ctx: discord.Interaction, query: str):
         await ctx.followup.send(f"Could not find or play the song. Error: `{e}`")
         print(f"Error in play command: {e}")
 
+@dj_yasuo.tree.command(name="pause", description="DJ Yasuo will pause the current song.")
+async def pause(ctx: discord.Interaction):
+    channel = ctx.guild.voice_client
+    if channel and channel.is_playing():
+        channel.pause()
+        embed_player = discord.Embed(description="Song Paused.", color=discord.Color.red())
+        await ctx.response.send_message(embed=embed_player)
+    else:
+        await ctx.response.send_message(f"There is no song playing to pause.")
+
+@dj_yasuo.tree.command(name="resume", description="DJ Yasuo will resume the current paused song.")
+async def resume(ctx: discord.Interaction):
+    channel = ctx.guild.voice_client
+    if channel and channel.is_paused():
+        channel.resume()
+        embed_player = discord.Embed(description="Song Resumed.", color=discord.Color.blue())
+        await ctx.response.send_message(embed=embed_player)
+    else:
+        await ctx.response.send_message(f"There is no song currently paused.")
+
 @dj_yasuo.tree.command(name="stop", description="DJ Yasuo will stop playing the current song.")
 async def stop(ctx: discord.Interaction):
     if ctx.guild.voice_client:
