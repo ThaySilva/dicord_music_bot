@@ -66,7 +66,8 @@ class Song:
                 await print(f"Could not find or play the song. Error: `{e}`")
                 return
 
-        return cls(discord.FFmpegPCMAudio(song_url, **FFMPEG_OPTIONS), song=song, requester=requester)
+        return cls(discord.FFmpegPCMAudio(song_url, **FFMPEG_OPTIONS),
+                   song=song, requester=requester)
 
     def _format_duration(self, seconds):
         if seconds is None:
@@ -80,6 +81,48 @@ class Song:
 # Store playlists per guilds
 song_queues = {}
 
+async def play_next(ctx, guild):
+    if song_queues.get(guild.id):
+        next_song = song_queues[guild.id].pop(0)
+        song_title = next_song['title']
+        current_song = next_song['song']
+
+        channel = guild.voice_client
+
+        source = discord.FFmpegPCMAudio(current_song.url, **FFMPEG_OPTIONS)
+
+        def after_playing(error):
+            r = asyncio.run_coroutine_threadsafe(play_next(ctx, guild),
+                                                 dj_yasuo.loop)
+            try:
+                r.result()
+            except Exception as e:
+                print(f"Error encountered {e}")
+
+        channel.play(source, after=after_playing)
+
+        embed_player = discord.Embed(
+            title="Now Playing",
+            description=f"{song_title}",
+            color=discord.Color.blue()
+        )
+
+        embed_player.add_field(
+            name="Requested By",
+            value=current_song.requester.mention,
+            inline=True
+        )
+
+        embed_player.add_field(
+            name="Duration",
+            value=current_song.duration,
+            inline=True
+        )
+
+        if current_song.thumbnail:
+            embed_player.set_thumbnail(url=current_song.thumbnail)
+        await ctx.followup.send(embed=embed_player)
+
 @dj_yasuo.event
 async def on_ready():
     print(f"DJ Yasuo connected as {dj_yasuo.user}")
@@ -89,23 +132,43 @@ async def on_ready():
     except Exception as e:
         print(f"Error encounteres: {e}")
 
-@dj_yasuo.tree.command(name="join", description="DJ Yasuo will join the voice channel.")
+@dj_yasuo.tree.command(name="join",
+                       description="DJ Yasuo will join the voice channel.")
 async def join(ctx: discord.Interaction):
     if not ctx.user.voice:
-        await ctx.response.send_message(f"Some mistakes you can\'t make twice. Join a voice channel.")
+        embed_response = discord.Embed(
+            description="Some mistakes you can\'t make twice. Join a voice channel.",
+            color=discord.Color.red()
+        )
+        await ctx.response.send_message(embed=embed_response)
         return
 
     channel = ctx.user.voice.channel
     await channel.connect()
-    await ctx.response.send_message(f"A wanderer isn\'t always lost. Joined {channel.name}")
+    embed_response = discord.Embed(
+        description=f"A wanderer isn\'t always lost. Joined {channel.name}",
+        color=discord.Color.green()
+    )
+    await ctx.response.send_message(embed=embed_response)
 
-@dj_yasuo.tree.command(name="leave", description="DJ Yasuo will leave the voice channel.")
+@dj_yasuo.tree.command(name="leave",
+                       description="DJ Yasuo will leave the voice channel.")
 async def leave(ctx: discord.Interaction):
     if ctx.guild.voice_client:
         await ctx.guild.voice_client.disconnect()
-        await ctx.response.send_message(f"No cure for fools.")
+        song_queues.pop(ctx.guild.id, None)
+        embed_response = discord.Embed(
+            description="No cure for fools.",
+            color=discord.Color.red()
+        )
+        await ctx.response.send_message(embed=embed_response)
     else:
-        await ctx.response.send_message(f"If you've come to kill me... I hope you brought friends. I am not in a voice channel.")
+        embed_response = discord.Embed(
+            description="If you've come to kill me... " \
+            "I hope you brought friends. I am not in a voice channel.",
+            color=discord.Color.red()
+        )
+        await ctx.response.send_message(embed=embed_response)
 
 @dj_yasuo.tree.command(name="play", description="DJ Yasuo will play a song.")
 @app_commands.describe(query="Song name and artist or youtube url")
@@ -116,58 +179,147 @@ async def play(ctx: discord.Interaction, query: str):
         if ctx.user.voice:
             channel = ctx.user.voice.channel
             await channel.connect()
-            await ctx.followup.send(f"A wanderer isn\'t always lost. Joined {channel.name}")
+            embed_response = discord.Embed(
+                description=f"A wanderer isn\'t always lost. " \
+                            f"Joined {channel.name}",
+                color=discord.Color.green()
+            )
+            await ctx.followup.send(embed=embed_response)
         else:
-            await ctx.followup.send(f"Some mistakes you can\'t make twice. Join a voice channel.")
+            embed_response = discord.Embed(
+                description="Some mistakes you can\'t make twice. " \
+                            "Join a voice channel.",
+                color=discord.Color.red()
+            )
+            await ctx.followup.send(embed=embed_response)
             return
 
     channel = ctx.guild.voice_client
 
-    if channel.is_playing():
-        channel.stop()
-
-    await ctx.followup.send(f"Sorye! Searching for `{query}`...")
+    embed_response = discord.Embed(
+        description=f"Sorye! Searching for {query}...",
+        color=discord.Color.purple()
+    )
+    await ctx.followup.send(embed=embed_response)
     try:
-        song = await Song.from_query(query, loop=dj_yasuo.loop, stream=True, requester=ctx.user)
-        embed_player = discord.Embed(title="Now Playing", description=f"{song.title}", color=discord.Color.blue())
-        embed_player.add_field(name="Requested By", value=song.requester.mention, inline=True)
-        embed_player.add_field(name="Duration", value=song.duration, inline=True)
-        if song.thumbnail:
-            embed_player.set_thumbnail(url=song.thumbnail)
+        song = await Song.from_query(query,
+                                     loop=dj_yasuo.loop,
+                                     stream=True,
+                                     requester=ctx.user)
 
-        channel.play(discord.FFmpegPCMAudio(song.url, **FFMPEG_OPTIONS))
-        await ctx.followup.send(embed=embed_player)
+        queue = song_queues.get(ctx.guild.id, [])
+        queue.append({'title': song.title, 'song': song})
+        song_queues[ctx.guild.id] = queue
+
+        if not channel.is_playing():
+            await play_next(ctx, ctx.guild)
+        else:
+            embed_player = discord.Embed(
+                title="Added song to queue",
+                description=song.title,
+                color=discord.Color.orange()
+            )
+            await ctx.followup.send(embed=embed_player)
     except Exception as e:
-        await ctx.followup.send(f"Could not find or play the song. Error: `{e}`")
+        await ctx.followup.send(f"Could not find or play the song. Error: {e}")
         print(f"Error in play command: {e}")
 
-@dj_yasuo.tree.command(name="pause", description="DJ Yasuo will pause the current song.")
+@dj_yasuo.tree.command(name="pause",
+                       description="DJ Yasuo will pause the current song.")
 async def pause(ctx: discord.Interaction):
     channel = ctx.guild.voice_client
     if channel and channel.is_playing():
         channel.pause()
-        embed_player = discord.Embed(description="Song Paused.", color=discord.Color.red())
+        embed_player = discord.Embed(
+            description="Song Paused.",
+            color=discord.Color.red()
+        )
         await ctx.response.send_message(embed=embed_player)
     else:
-        await ctx.response.send_message(f"There is no song playing to pause.")
+        embed_response = discord.Embed(
+            description="There is no song playing to pause.",
+            color=discord.Color.red()
+        )
+        await ctx.response.send_message(embed=embed_response)
 
-@dj_yasuo.tree.command(name="resume", description="DJ Yasuo will resume the current paused song.")
+@dj_yasuo.tree.command(
+        name="resume",
+        description="DJ Yasuo will resume the current paused song.")
 async def resume(ctx: discord.Interaction):
     channel = ctx.guild.voice_client
     if channel and channel.is_paused():
         channel.resume()
-        embed_player = discord.Embed(description="Song Resumed.", color=discord.Color.blue())
+        embed_player = discord.Embed(
+            description="Song Resumed.",
+            color=discord.Color.blue()
+        )
         await ctx.response.send_message(embed=embed_player)
     else:
-        await ctx.response.send_message(f"There is no song currently paused.")
+        embed_response = discord.Embed(
+            description="There is no song currently paused.",
+            color=discord.Color.red()
+        )
+        await ctx.response.send_message(embed=embed_response)
 
-@dj_yasuo.tree.command(name="stop", description="DJ Yasuo will stop playing the current song.")
+@dj_yasuo.tree.command(
+        name="stop",
+        description="DJ Yasuo will stop playing the current song.")
 async def stop(ctx: discord.Interaction):
+    channel = ctx.guild.voice_client
     if ctx.guild.voice_client:
-        ctx.guild.voice_client.stop()
-        await ctx.response.send_message(f"Stopped playing.")
+        channel.stop()
+        song_queues.pop(ctx.guild.id, None)
+        embed_response = discord.Embed(
+            description="Stopped playing and cleared the playlist.",
+            color=discord.Color.red()
+        )
+        await ctx.response.send_message(embed=embed_response)
     else:
-        await ctx.response.send_message(f"If you've come to kill me... I hope you brought friends. I am not in a voice channel.")
+        embed_response = discord.Embed(
+            description="If you've come to kill me... " \
+            "I hope you brought friends. I am not in a voice channel.",
+            color=discord.Color.red()
+        )
+        await ctx.response.send_message(embed=embed_response)
+
+@dj_yasuo.tree.command(name="skip",
+                       description="DJ Yasuo will skip to the next song")
+async def skip(ctx: discord.Interaction):
+    channel = ctx.guild.voice_client
+    if channel and channel.is_playing():
+        channel.stop()
+        embed_response = discord.Embed(
+            description="Skipped to the next song.",
+            color=discord.Color.orange()
+        )
+        await ctx.response.send_message(embed=embed_response)
+    else:
+        embed_response = discord.Embed(
+            description="There is no song currently playing.",
+            color=discord.Color.red()
+        )
+        await ctx.response.send_message(embed=embed_response)
+
+@dj_yasuo.tree.command(name="playlist",
+                       description="View the current playlist")
+async def playlist(ctx: discord.Interaction):
+    queue = song_queues.get(ctx.guild.id, [])
+    if not queue:
+        embed_response = discord.Embed(
+            description="The playlist is empty.",
+            color=discord.Color.brand_red()
+        )
+        await ctx.response.send_message(embed=embed_response)
+        return
+
+    queue_list = "\n".join([f"**{id+1}.** {song['title']}" 
+                            for id, song in enumerate(queue)])
+    embed_player = discord.Embed(
+        title="Playlist",
+        description=queue_list,
+        color=discord.Color.blurple()
+    )
+    await ctx.response.send_message(embed=embed_player)
 
 
 dj_yasuo.run(DISCORD_TOKEN)
