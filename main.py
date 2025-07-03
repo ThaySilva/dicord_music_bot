@@ -80,20 +80,47 @@ class Song:
 
 # Store playlists per guilds
 song_queues = {}
+loop_mode = {}
 
-async def play_next(ctx, guild):
+async def check_auto_disconnect(ctx: discord.Interaction,
+                                guild: discord.Guild):
+    await asyncio.sleep(120)
+
+    channel = guild.voice_client
+    if channel and not channel.is_playing() and not channel.is_paused():
+        empty_queue = not song_queues.get(guild.id)
+        if empty_queue:
+            await channel.disconnect()
+            song_queues.pop(guild.id, None)
+            embed_response = discord.Embed(
+                title=f"Disconnect from {channel.name} due to inactivity",
+                color=discord.Color.red()
+            )
+            await ctx.followup.send(embed=embed_response)
+
+async def play_next(ctx: discord.Interaction, guild: discord.Guild):
     if song_queues.get(guild.id):
         next_song = song_queues[guild.id].pop(0)
+        mode = loop_mode.get(guild.id, "off")
         song_title = next_song['title']
         current_song = next_song['song']
+
+        if mode == "one":
+            song_queues[guild.id].insert(0, current_song)
+        elif mode == "all":
+            song_queues[guild.id].append(next_song)
 
         channel = guild.voice_client
 
         source = discord.FFmpegPCMAudio(current_song.url, **FFMPEG_OPTIONS)
 
         def after_playing(error):
-            r = asyncio.run_coroutine_threadsafe(play_next(ctx, guild),
-                                                 dj_yasuo.loop)
+            if song_queues.get(guild.id):
+                r = asyncio.run_coroutine_threadsafe(play_next(ctx, guild),
+                                                     dj_yasuo.loop)
+            else:
+                r = asyncio.run_coroutine_threadsafe(
+                    check_auto_disconnect(ctx, guild), dj_yasuo.loop)
             try:
                 r.result()
             except Exception as e:
@@ -157,6 +184,7 @@ async def leave(ctx: discord.Interaction):
     if ctx.guild.voice_client:
         await ctx.guild.voice_client.disconnect()
         song_queues.pop(ctx.guild.id, None)
+        loop_mode.pop(ctx.guild.id, None)
         embed_response = discord.Embed(
             description="No cure for fools.",
             color=discord.Color.red()
@@ -269,6 +297,7 @@ async def stop(ctx: discord.Interaction):
     if ctx.guild.voice_client:
         channel.stop()
         song_queues.pop(ctx.guild.id, None)
+        loop_mode.pop(ctx.guild.id, None)
         embed_response = discord.Embed(
             description="Stopped playing and cleared the playlist.",
             color=discord.Color.red()
@@ -299,6 +328,7 @@ async def skip(ctx: discord.Interaction):
             color=discord.Color.red()
         )
         await ctx.response.send_message(embed=embed_response)
+    await check_auto_disconnect(ctx, ctx.guild)
 
 @dj_yasuo.tree.command(name="playlist",
                        description="View the current playlist")
@@ -320,6 +350,33 @@ async def playlist(ctx: discord.Interaction):
         color=discord.Color.blurple()
     )
     await ctx.response.send_message(embed=embed_player)
+
+@dj_yasuo.tree.command(name="loopmode",
+                       description="Loop one song or the playlist")
+@app_commands.describe(mode="Loop mode: off, " \
+                       "one (loop current song), all (loop playlist)")
+async def loopmode(ctx: discord.Interaction, mode: str):
+    valid_modes = ["off", "one", "all"]
+    if mode.lower() not in valid_modes:
+        embed_response = discord.Embed(
+            title="Invalid loop mode. Choose 'off', 'one' or 'all'.",
+            color=discord.Color.red()
+        )
+        await ctx.response.send_message(embed=embed_response)
+        return
+
+    loop_mode[ctx.guild.id] = mode.lower()
+    loop_type = {
+        "off": "Loop OFF",
+        "one": "Loop Current Song",
+        "all": "Loop Playlist"
+    }
+
+    embed_response = discord.Embed(
+        description=f"{loop_type[mode.lower()]}",
+        color=discord.Color.teal()
+    )
+    await ctx.response.send_message(embed=embed_response)
 
 
 dj_yasuo.run(DISCORD_TOKEN)

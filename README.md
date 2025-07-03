@@ -1,4 +1,4 @@
-# DJ Yasuo V0.2
+# DJ Yasuo V0.3
 
 <center><img src='https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEhfT_PDIcDSUSDxgaPI2HRaE4_QMlcnoiFPl9pznBO8DSE7Wk1DjpcHIjenbZIS-lQV5ErA2woRxi2Z3f2cphaIcmUSL814GuzaamvnfXaQN4wuN7Tatk6nvv16jXK_Vuewxlm7t2Cnr6ye/w919-h516-p-k-no-nu/dj-yasuo-true-damage-uhdpaper.com-4K-5.1376-wp.thumbnail.jpg' width="800" height="450"></center> <br>
 
@@ -15,6 +15,7 @@ DJ Yasuo a discord music bot created as a fun personal project. Written using [P
 | <code>/stop</code> | The bot will stop playing the current song. |
 | <code>/skip</code> | The bot will skip the current song and play the next song in the playlist. |
 | <code>/playlist</code> | The bot will display all the songs currently in the playlist. |
+| <code>/loopmode</code> < off / one / all > | The bot will loop the current song playing if mode is "one", or loop the entire playlist if mode is "all" |
 
 > **[!NOTE]**
 > <em>Disclaimer: All publicly recognisable characters, settings, etc. are the property of Riot Games. The author is in no way associated with the owners, creators, or producers of any previously copyrighted material. No copyright infringement is intended.</em>
