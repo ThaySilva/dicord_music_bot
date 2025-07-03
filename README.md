@@ -9,10 +9,12 @@ DJ Yasuo a discord music bot created as a fun personal project. Written using [P
 | ------------------- | ----------------------------------------------- |
 | <code>/join</code>  | The bot will join the voice channel you are in. |
 | <code>/leave</code> | The bot will leave the current voice channel. |
-| <code>/play</code> < Song Name > < Song Artist > <br> or <br> <code>/play</code> < Youtube song url >| The bot will search and play the song. <br> <br> The bot will play the song from the url. |
+| <code>/play</code> < Song Name > < Song Artist > <br> or <br> <code>/play</code> < Youtube song url >| The bot will search and play the song or add to the playlist if a song is already playing. <br> <br> The bot will play the song from the url or add to the playlist if a song is already playing. |
 | <code>/pause</code> | The bot will pause the song currently playing. |
 | <code>/resume</code> | The bot will resume playing the currently paused song. |
 | <code>/stop</code> | The bot will stop playing the current song. |
+| <code>/skip</code> | The bot will skip the current song and play the next song in the playlist. |
+| <code>/playlist</code> | The bot will display all the songs currently in the playlist. |
 
 > **[!NOTE]**
 > <em>Disclaimer: All publicly recognisable characters, settings, etc. are the property of Riot Games. The author is in no way associated with the owners, creators, or producers of any previously copyrighted material. No copyright infringement is intended.</em>
